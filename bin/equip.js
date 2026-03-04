@@ -44,7 +44,7 @@ if (!entry) {
 
 // Spawn: npx -y <package> <command> [...extraArgs]
 const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
-const child = spawn(npxCmd, ["-y", entry.package, entry.command, ...extraArgs], {
+const child = spawn(npxCmd, ["-y", `${entry.package}@latest`, entry.command, ...extraArgs], {
   stdio: "inherit",
   shell: process.platform === "win32",
   env: { ...process.env, EQUIP_VERSION },
