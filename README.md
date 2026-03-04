@@ -8,14 +8,24 @@ Equip handles the hard part of distributing your MCP tool: detecting which AI co
 
 | Platform | MCP Config | Rules |
 |---|---|---|
-| Claude Code | `~/.claude.json` (`mcpServers`) | `~/.claude/CLAUDE.md` (append) |
-| Cursor | `~/.cursor/mcp.json` (`mcpServers`) | Clipboard (no writable global path) |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` (`mcpServers`) | `global_rules.md` (append) |
-| VS Code | `Code/User/mcp.json` (`servers`, `type: "http"`) | Clipboard |
-| Cline | `globalStorage/.../cline_mcp_settings.json` (`mcpServers`) | `~/Documents/Cline/Rules/` (standalone file) |
-| Roo Code | `globalStorage/.../cline_mcp_settings.json` (`mcpServers`) | `~/.roo/rules/` (standalone file) |
+| Claude Code | `~/.claude.json` (JSON, `mcpServers`) | `~/.claude/CLAUDE.md` (append) |
+| Cursor | `~/.cursor/mcp.json` (JSON, `mcpServers`) | Clipboard (no writable global path) |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` (JSON, `mcpServers`) | `global_rules.md` (append) |
+| VS Code | `Code/User/mcp.json` (JSON, `servers`, `type: "http"`) | Clipboard |
+| Cline | `globalStorage/.../cline_mcp_settings.json` (JSON, `mcpServers`) | `~/Documents/Cline/Rules/` (standalone file) |
+| Roo Code | `globalStorage/.../cline_mcp_settings.json` (JSON, `mcpServers`) | `~/.roo/rules/` (standalone file) |
+| Codex | `~/.codex/config.toml` (TOML, `mcp_servers`) | `~/.codex/AGENTS.md` (append) |
+| Gemini CLI | `~/.gemini/settings.json` (JSON, `mcpServers`, `httpUrl`) | `~/.gemini/GEMINI.md` (append) |
 
-## Usage
+## Quick Start
+
+```bash
+npx @cg3/equip prior
+```
+
+That's it. Detects your platforms, authenticates, installs MCP + rules, and verifies — all in one command. Pass `--dry-run` to preview without writing files.
+
+## Programmatic Usage
 
 ```js
 const { Equip } = require("@cg3/equip");
@@ -84,7 +94,7 @@ const { detectPlatforms, installMcpJson, installRules, createManualPlatform, pla
 ## Key Features
 
 - **Zero dependencies** — Pure Node.js, works with Node 18+
-- **Platform-aware** — Handles each platform's config quirks (root keys, URL fields, type requirements)
+- **Platform-aware** — Handles each platform's config quirks (JSON vs TOML, root keys, URL fields, type requirements)
 - **Non-destructive** — Merges into existing configs, creates backups, preserves other servers
 - **Versioned rules** — Marker-based blocks enable idempotent updates without clobbering user content
 - **Dry-run support** — Preview changes without writing files

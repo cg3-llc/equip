@@ -1,10 +1,10 @@
 // @cg3/equip — Universal MCP + behavioral rules installer for AI coding agents.
-// Zero dependencies. Works with Claude Code, Cursor, Windsurf, VS Code, Cline, Roo Code.
+// Zero dependencies. Works with Claude Code, Cursor, Windsurf, VS Code, Cline, Roo Code, Codex, Gemini CLI.
 
 "use strict";
 
 const { detectPlatforms, whichSync, dirExists, fileExists } = require("./lib/detect");
-const { readMcpEntry, buildHttpConfig, buildHttpConfigWithAuth, buildStdioConfig, installMcp, installMcpJson, uninstallMcp, updateMcpKey } = require("./lib/mcp");
+const { readMcpEntry, buildHttpConfig, buildHttpConfigWithAuth, buildStdioConfig, installMcp, installMcpJson, installMcpToml, uninstallMcp, updateMcpKey, parseTomlServerEntry, parseTomlSubTables, buildTomlEntry, removeTomlEntry } = require("./lib/mcp");
 const { parseRulesVersion, installRules, uninstallRules, markerPatterns } = require("./lib/rules");
 const { createManualPlatform, platformName, KNOWN_PLATFORMS } = require("./lib/platforms");
 const cli = require("./lib/cli");
@@ -145,7 +145,7 @@ class Equip {
    * @returns {object|null} Existing MCP config or null
    */
   readMcp(platform) {
-    return readMcpEntry(platform.configPath, platform.rootKey, this.name);
+    return readMcpEntry(platform.configPath, platform.rootKey, this.name, platform.configFormat || "json");
   }
 }
 
@@ -159,8 +159,13 @@ module.exports = {
   buildStdioConfig,
   installMcp,
   installMcpJson,
+  installMcpToml,
   uninstallMcp,
   updateMcpKey,
+  parseTomlServerEntry,
+  parseTomlSubTables,
+  buildTomlEntry,
+  removeTomlEntry,
   installRules,
   uninstallRules,
   parseRulesVersion,

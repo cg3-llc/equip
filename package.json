@@ -1,8 +1,11 @@
 {
   "name": "@cg3/equip",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Universal MCP + behavioral rules installer for AI coding agents",
   "main": "index.js",
+  "bin": {
+    "equip": "bin/equip.js"
+  },
   "exports": {
     ".": "./index.js",
     "./detect": "./lib/detect.js",
@@ -13,6 +16,7 @@
   },
   "files": [
     "index.js",
+    "bin/",
     "lib/"
   ],
   "keywords": [
@@ -25,7 +29,9 @@
     "windsurf",
     "vscode",
     "cline",
-    "roo-code"
+    "roo-code",
+    "codex",
+    "gemini"
   ],
   "author": "CG3 LLC",
   "license": "MIT",

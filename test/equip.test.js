@@ -17,6 +17,7 @@ const {
   buildHttpConfigWithAuth,
   buildStdioConfig,
   installMcpJson,
+  installMcpToml,
   uninstallMcp,
   installRules,
   uninstallRules,
@@ -25,6 +26,10 @@ const {
   createManualPlatform,
   platformName,
   KNOWN_PLATFORMS,
+  parseTomlServerEntry,
+  parseTomlSubTables,
+  buildTomlEntry,
+  removeTomlEntry,
 } = require("../index");
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -273,11 +278,13 @@ describe("platformName", () => {
 });
 
 describe("KNOWN_PLATFORMS", () => {
-  it("includes all 6 platforms", () => {
-    assert.equal(KNOWN_PLATFORMS.length, 6);
+  it("includes all 8 platforms", () => {
+    assert.equal(KNOWN_PLATFORMS.length, 8);
     assert.ok(KNOWN_PLATFORMS.includes("vscode"));
     assert.ok(KNOWN_PLATFORMS.includes("cline"));
     assert.ok(KNOWN_PLATFORMS.includes("roo-code"));
+    assert.ok(KNOWN_PLATFORMS.includes("codex"));
+    assert.ok(KNOWN_PLATFORMS.includes("gemini-cli"));
   });
 });
 
@@ -310,5 +317,311 @@ describe("parseRulesVersion", () => {
   it("parses version from marker", () => {
     assert.equal(parseRulesVersion("<!-- test:v1.2.3 -->", "test"), "1.2.3");
     assert.equal(parseRulesVersion("no marker here", "test"), null);
+  });
+});
+
+// ─── TOML Helpers (Codex) ───────────────────────────────────
+
+describe("parseTomlServerEntry", () => {
+  it("parses a server entry", () => {
+    const toml = `[mcp_servers.prior]\nurl = "https://api.cg3.io/mcp"\nenabled = true\n`;
+    const entry = parseTomlServerEntry(toml, "mcp_servers", "prior");
+    assert.equal(entry.url, "https://api.cg3.io/mcp");
+    assert.equal(entry.enabled, true);
+  });
+
+  it("returns null for missing server", () => {
+    const toml = `[mcp_servers.other]\nurl = "https://example.com"\n`;
+    assert.equal(parseTomlServerEntry(toml, "mcp_servers", "prior"), null);
+  });
+
+  it("handles multiple tables", () => {
+    const toml = `[mcp_servers.first]\nurl = "https://first.com"\n\n[mcp_servers.second]\nurl = "https://second.com"\n`;
+    const first = parseTomlServerEntry(toml, "mcp_servers", "first");
+    const second = parseTomlServerEntry(toml, "mcp_servers", "second");
+    assert.equal(first.url, "https://first.com");
+    assert.equal(second.url, "https://second.com");
+  });
+
+  it("parses numbers and booleans", () => {
+    const toml = `[mcp_servers.test]\nurl = "https://x.com"\ntimeout = 30\nenabled = false\n`;
+    const entry = parseTomlServerEntry(toml, "mcp_servers", "test");
+    assert.equal(entry.timeout, 30);
+    assert.equal(entry.enabled, false);
+  });
+});
+
+describe("parseTomlSubTables", () => {
+  it("parses sub-tables like env and http_headers", () => {
+    const toml = `[mcp_servers.prior]\nurl = "https://api.cg3.io/mcp"\n\n[mcp_servers.prior.http_headers]\nAuthorization = "Bearer ask_123"\n\n[mcp_servers.prior.env]\nDEBUG = "true"\n`;
+    const subs = parseTomlSubTables(toml, "mcp_servers", "prior");
+    assert.equal(subs.http_headers.Authorization, "Bearer ask_123");
+    assert.equal(subs.env.DEBUG, "true");
+  });
+});
+
+describe("buildTomlEntry", () => {
+  it("builds valid TOML for HTTP server", () => {
+    const toml = buildTomlEntry("mcp_servers", "prior", { url: "https://api.cg3.io/mcp", http_headers: { Authorization: "Bearer key" } });
+    assert.ok(toml.includes("[mcp_servers.prior]"));
+    assert.ok(toml.includes('url = "https://api.cg3.io/mcp"'));
+    assert.ok(toml.includes("[mcp_servers.prior.http_headers]"));
+    assert.ok(toml.includes('Authorization = "Bearer key"'));
+  });
+
+  it("handles boolean and number values", () => {
+    const toml = buildTomlEntry("mcp_servers", "test", { url: "https://x.com", enabled: true, startup_timeout_sec: 15 });
+    assert.ok(toml.includes("enabled = true"));
+    assert.ok(toml.includes("startup_timeout_sec = 15"));
+  });
+});
+
+describe("removeTomlEntry", () => {
+  it("removes entry and sub-tables", () => {
+    const toml = `[other]\nfoo = "bar"\n\n[mcp_servers.prior]\nurl = "https://api.cg3.io/mcp"\n\n[mcp_servers.prior.http_headers]\nAuthorization = "Bearer key"\n\n[mcp_servers.second]\nurl = "https://second.com"\n`;
+    const result = removeTomlEntry(toml, "mcp_servers", "prior");
+    assert.ok(!result.includes("[mcp_servers.prior]"));
+    assert.ok(!result.includes("api.cg3.io"));
+    assert.ok(result.includes("[mcp_servers.second]"));
+    assert.ok(result.includes("[other]"));
+  });
+
+  it("handles entry at end of file", () => {
+    const toml = `[other]\nfoo = "bar"\n\n[mcp_servers.prior]\nurl = "https://api.cg3.io/mcp"\n`;
+    const result = removeTomlEntry(toml, "mcp_servers", "prior");
+    assert.ok(!result.includes("[mcp_servers.prior]"));
+    assert.ok(result.includes("[other]"));
+  });
+});
+
+// ─── Codex TOML Install/Uninstall ───────────────────────────
+
+describe("installMcpToml", () => {
+  it("creates TOML config file", () => {
+    const configPath = tmpPath("codex-config") + ".toml";
+    const p = mockPlatform({ platform: "codex", configPath, rootKey: "mcp_servers", configFormat: "toml" });
+    cleanup(configPath);
+    installMcpToml(p, "prior", { url: "https://api.cg3.io/mcp", http_headers: { Authorization: "Bearer key" } }, false);
+    const content = fs.readFileSync(configPath, "utf-8");
+    assert.ok(content.includes("[mcp_servers.prior]"));
+    assert.ok(content.includes('url = "https://api.cg3.io/mcp"'));
+    assert.ok(content.includes("[mcp_servers.prior.http_headers]"));
+    cleanup(configPath);
+  });
+
+  it("preserves existing TOML content", () => {
+    const configPath = tmpPath("codex-config") + ".toml";
+    fs.writeFileSync(configPath, '[mcp_servers.existing]\nurl = "https://example.com"\n');
+    const p = mockPlatform({ platform: "codex", configPath, rootKey: "mcp_servers", configFormat: "toml" });
+    installMcpToml(p, "prior", { url: "https://api.cg3.io/mcp" }, false);
+    const content = fs.readFileSync(configPath, "utf-8");
+    assert.ok(content.includes("[mcp_servers.existing]"));
+    assert.ok(content.includes("[mcp_servers.prior]"));
+    cleanup(configPath);
+  });
+
+  it("replaces existing entry on re-install", () => {
+    const configPath = tmpPath("codex-config") + ".toml";
+    const p = mockPlatform({ platform: "codex", configPath, rootKey: "mcp_servers", configFormat: "toml" });
+    cleanup(configPath);
+    installMcpToml(p, "prior", { url: "https://old.com" }, false);
+    installMcpToml(p, "prior", { url: "https://new.com" }, false);
+    const content = fs.readFileSync(configPath, "utf-8");
+    assert.ok(content.includes("https://new.com"));
+    assert.ok(!content.includes("https://old.com"));
+    const count = (content.match(/\[mcp_servers\.prior\]/g) || []).length;
+    assert.equal(count, 1);
+    cleanup(configPath);
+  });
+});
+
+describe("Codex uninstallMcp (TOML)", () => {
+  it("removes entry from TOML", () => {
+    const configPath = tmpPath("codex-config") + ".toml";
+    fs.writeFileSync(configPath, '[mcp_servers.prior]\nurl = "https://api.cg3.io/mcp"\n\n[mcp_servers.other]\nurl = "https://other.com"\n');
+    const p = mockPlatform({ platform: "codex", configPath, rootKey: "mcp_servers", configFormat: "toml" });
+    const removed = uninstallMcp(p, "prior", false);
+    assert.ok(removed);
+    const content = fs.readFileSync(configPath, "utf-8");
+    assert.ok(!content.includes("[mcp_servers.prior]"));
+    assert.ok(content.includes("[mcp_servers.other]"));
+    cleanup(configPath);
+  });
+});
+
+// ─── Codex HTTP Config ──────────────────────────────────────
+
+describe("buildHttpConfig (Codex)", () => {
+  it("returns url for codex", () => {
+    const c = buildHttpConfig("https://api.cg3.io/mcp", "codex");
+    assert.equal(c.url, "https://api.cg3.io/mcp");
+    assert.ok(!c.serverUrl);
+    assert.ok(!c.type);
+  });
+});
+
+describe("buildHttpConfigWithAuth (Codex)", () => {
+  it("uses http_headers for codex", () => {
+    const c = buildHttpConfigWithAuth("https://api.cg3.io/mcp", "ask_123", "codex");
+    assert.equal(c.url, "https://api.cg3.io/mcp");
+    assert.equal(c.http_headers.Authorization, "Bearer ask_123");
+    assert.ok(!c.headers, "should not have 'headers' key for codex");
+  });
+});
+
+// ─── Gemini CLI Config ──────────────────────────────────────
+
+describe("buildHttpConfig (Gemini CLI)", () => {
+  it("returns httpUrl for gemini-cli", () => {
+    const c = buildHttpConfig("https://api.cg3.io/mcp", "gemini-cli");
+    assert.equal(c.httpUrl, "https://api.cg3.io/mcp");
+    assert.ok(!c.url);
+    assert.ok(!c.serverUrl);
+  });
+});
+
+describe("buildHttpConfigWithAuth (Gemini CLI)", () => {
+  it("uses headers for gemini-cli", () => {
+    const c = buildHttpConfigWithAuth("https://api.cg3.io/mcp", "ask_123", "gemini-cli");
+    assert.equal(c.httpUrl, "https://api.cg3.io/mcp");
+    assert.equal(c.headers.Authorization, "Bearer ask_123");
+  });
+});
+
+describe("Gemini CLI MCP install (JSON)", () => {
+  it("installs to settings.json with mcpServers", () => {
+    const configPath = tmpPath("gemini-settings") + ".json";
+    const p = mockPlatform({ platform: "gemini-cli", configPath, rootKey: "mcpServers", configFormat: "json" });
+    cleanup(configPath);
+    installMcpJson(p, "prior", { httpUrl: "https://api.cg3.io/mcp", headers: { Authorization: "Bearer key" } }, false);
+    const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.ok(data.mcpServers.prior);
+    assert.equal(data.mcpServers.prior.httpUrl, "https://api.cg3.io/mcp");
+    cleanup(configPath);
+  });
+
+  it("preserves existing Gemini settings", () => {
+    const configPath = tmpPath("gemini-settings") + ".json";
+    fs.writeFileSync(configPath, JSON.stringify({ selectedAuthType: "gemini-api-key", theme: "Dracula", mcpServers: { git: { command: "uvx", args: ["mcp-server-git"] } } }));
+    const p = mockPlatform({ platform: "gemini-cli", configPath, rootKey: "mcpServers", configFormat: "json" });
+    installMcpJson(p, "prior", { httpUrl: "https://api.cg3.io/mcp" }, false);
+    const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.ok(data.mcpServers.prior);
+    assert.ok(data.mcpServers.git, "existing git server should be preserved");
+    assert.equal(data.selectedAuthType, "gemini-api-key", "non-MCP settings preserved");
+    assert.equal(data.theme, "Dracula", "theme preserved");
+    cleanup(configPath);
+  });
+});
+
+// ─── Codex & Gemini Platform Names ──────────────────────────
+
+describe("platformName (new platforms)", () => {
+  it("returns Codex", () => {
+    assert.equal(platformName("codex"), "Codex");
+  });
+  it("returns Gemini CLI", () => {
+    assert.equal(platformName("gemini-cli"), "Gemini CLI");
+  });
+});
+
+// ─── Codex & Gemini Rules ───────────────────────────────────
+
+describe("Codex rules install", () => {
+  it("appends rules to AGENTS.md", () => {
+    const rulesPath = tmpPath("codex-agents") + ".md";
+    fs.writeFileSync(rulesPath, "# My AGENTS.md\n\nAlways run tests.\n");
+    const p = mockPlatform({ platform: "codex", rulesPath });
+    const r = installRules(p, { content: RULES_CONTENT, version: "1.0.0", marker: "test" });
+    assert.equal(r.action, "created");
+    const content = fs.readFileSync(rulesPath, "utf-8");
+    assert.ok(content.includes("Always run tests"), "original content preserved");
+    assert.ok(content.includes("test:v1.0.0"), "marker present");
+    cleanup(rulesPath);
+  });
+});
+
+describe("Gemini CLI rules install", () => {
+  it("appends rules to GEMINI.md", () => {
+    const rulesPath = tmpPath("gemini-rules") + ".md";
+    fs.writeFileSync(rulesPath, "# My Gemini Rules\n\nPrefer TypeScript.\n");
+    const p = mockPlatform({ platform: "gemini-cli", rulesPath });
+    const r = installRules(p, { content: RULES_CONTENT, version: "1.0.0", marker: "test" });
+    assert.equal(r.action, "created");
+    const content = fs.readFileSync(rulesPath, "utf-8");
+    assert.ok(content.includes("Prefer TypeScript"), "original content preserved");
+    assert.ok(content.includes("test:v1.0.0"), "marker present");
+    cleanup(rulesPath);
+  });
+});
+
+// ─── Equip Class (Codex & Gemini) ───────────────────────────
+
+describe("Equip class (Codex)", () => {
+  it("buildConfig uses http_headers for codex", () => {
+    const e = new Equip({ name: "test", serverUrl: "https://example.com/mcp" });
+    const config = e.buildConfig("codex", "key123");
+    assert.equal(config.url, "https://example.com/mcp");
+    assert.equal(config.http_headers.Authorization, "Bearer key123");
+    assert.ok(!config.headers);
+  });
+
+  it("installMcp and readMcp roundtrip with TOML", () => {
+    const configPath = tmpPath("codex-equip") + ".toml";
+    const e = new Equip({ name: "myserver", serverUrl: "https://example.com/mcp" });
+    const p = mockPlatform({ platform: "codex", configPath, rootKey: "mcp_servers", configFormat: "toml" });
+    cleanup(configPath);
+    e.installMcp(p, "key123");
+    const entry = e.readMcp(p);
+    assert.ok(entry);
+    assert.equal(entry.url, "https://example.com/mcp");
+    assert.equal(entry.http_headers.Authorization, "Bearer key123");
+    e.uninstallMcp(p);
+    assert.equal(e.readMcp(p), null);
+    cleanup(configPath);
+  });
+});
+
+// ─── CLI Dispatcher ─────────────────────────────────────────
+
+describe("equip CLI", () => {
+  it("shows help with no args", () => {
+    const { execSync } = require("child_process");
+    const out = execSync("node bin/equip.js --help", { encoding: "utf-8", cwd: path.join(__dirname, "..") });
+    assert.ok(out.includes("Available tools:"));
+    assert.ok(out.includes("prior"));
+  });
+
+  it("errors on unknown tool", () => {
+    const { execSync } = require("child_process");
+    try {
+      execSync("node bin/equip.js nonexistent", { encoding: "utf-8", cwd: path.join(__dirname, ".."), stdio: "pipe" });
+      assert.fail("should have thrown");
+    } catch (e) {
+      assert.ok(e.stderr.includes("Unknown tool: nonexistent"));
+    }
+  });
+});
+
+describe("Equip class (Gemini CLI)", () => {
+  it("buildConfig uses httpUrl for gemini-cli", () => {
+    const e = new Equip({ name: "test", serverUrl: "https://example.com/mcp" });
+    const config = e.buildConfig("gemini-cli", "key123");
+    assert.equal(config.httpUrl, "https://example.com/mcp");
+    assert.equal(config.headers.Authorization, "Bearer key123");
+  });
+
+  it("installMcp and readMcp roundtrip with JSON", () => {
+    const configPath = tmpPath("gemini-equip") + ".json";
+    const e = new Equip({ name: "myserver", serverUrl: "https://example.com/mcp" });
+    const p = mockPlatform({ platform: "gemini-cli", configPath, rootKey: "mcpServers", configFormat: "json" });
+    cleanup(configPath);
+    e.installMcp(p, "key123");
+    const entry = e.readMcp(p);
+    assert.ok(entry);
+    assert.equal(entry.httpUrl, "https://example.com/mcp");
+    e.uninstallMcp(p);
+    assert.equal(e.readMcp(p), null);
+    cleanup(configPath);
   });
 });
