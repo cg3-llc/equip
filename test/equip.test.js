@@ -278,13 +278,14 @@ describe("platformName", () => {
 });
 
 describe("KNOWN_PLATFORMS", () => {
-  it("includes all 8 platforms", () => {
-    assert.equal(KNOWN_PLATFORMS.length, 8);
+  it("includes all 9 platforms", () => {
+    assert.equal(KNOWN_PLATFORMS.length, 9);
     assert.ok(KNOWN_PLATFORMS.includes("vscode"));
     assert.ok(KNOWN_PLATFORMS.includes("cline"));
     assert.ok(KNOWN_PLATFORMS.includes("roo-code"));
     assert.ok(KNOWN_PLATFORMS.includes("codex"));
     assert.ok(KNOWN_PLATFORMS.includes("gemini-cli"));
+    assert.ok(KNOWN_PLATFORMS.includes("junie"));
   });
 });
 
@@ -623,5 +624,90 @@ describe("Equip class (Gemini CLI)", () => {
     e.uninstallMcp(p);
     assert.equal(e.readMcp(p), null);
     cleanup(configPath);
+  });
+});
+
+// --- Junie -----------------------------------------------------------
+
+describe("platformName (Junie)", () => {
+  it("returns Junie", () => {
+    assert.equal(platformName("junie"), "Junie");
+  });
+});
+
+describe("buildHttpConfig (Junie)", () => {
+  it("returns url for junie", () => {
+    const config = buildHttpConfig("https://example.com/mcp", "junie");
+    assert.equal(config.url, "https://example.com/mcp");
+    assert.equal(config.type, undefined);
+  });
+});
+
+describe("buildHttpConfigWithAuth (Junie)", () => {
+  it("uses headers for junie", () => {
+    const config = buildHttpConfigWithAuth("https://example.com/mcp", "key123", "junie");
+    assert.equal(config.url, "https://example.com/mcp");
+    assert.equal(config.headers.Authorization, "Bearer key123");
+  });
+});
+
+describe("Junie MCP install (JSON)", () => {
+  it("installs to mcp.json with mcpServers", () => {
+    const dir = tmpPath("junie-mcp-dir");
+    fs.mkdirSync(dir, { recursive: true });
+    const configPath = path.join(dir, "mcp.json");
+    const p = mockPlatform({ platform: "junie", configPath, rootKey: "mcpServers", configFormat: "json" });
+    installMcpJson(p, "prior", { url: "https://api.cg3.io/mcp" }, false);
+    const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.ok(data.mcpServers.prior);
+    assert.equal(data.mcpServers.prior.url, "https://api.cg3.io/mcp");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("preserves existing Junie MCP entries", () => {
+    const dir = tmpPath("junie-mcp-existing-dir");
+    fs.mkdirSync(dir, { recursive: true });
+    const configPath = path.join(dir, "mcp.json");
+    fs.writeFileSync(configPath, JSON.stringify({ mcpServers: { other: { url: "https://other.com" } } }));
+    const p = mockPlatform({ platform: "junie", configPath, rootKey: "mcpServers", configFormat: "json" });
+    installMcpJson(p, "prior", { url: "https://api.cg3.io/mcp" }, false);
+    const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.equal(data.mcpServers.other.url, "https://other.com");
+    assert.equal(data.mcpServers.prior.url, "https://api.cg3.io/mcp");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Equip class (Junie)", () => {
+  it("buildConfig uses url and headers for junie", () => {
+    const e = new Equip({ name: "myserver", serverUrl: "https://example.com/mcp" });
+    const config = e.buildConfig("junie", "key123");
+    assert.equal(config.url, "https://example.com/mcp");
+    assert.equal(config.headers.Authorization, "Bearer key123");
+  });
+
+  it("installMcp and readMcp roundtrip with JSON", () => {
+    const configPath = tmpPath("junie-equip") + ".json";
+    const e = new Equip({ name: "myserver", serverUrl: "https://example.com/mcp" });
+    const p = mockPlatform({ platform: "junie", configPath, rootKey: "mcpServers", configFormat: "json" });
+    cleanup(configPath);
+    e.installMcp(p, "key123");
+    const entry = e.readMcp(p);
+    assert.ok(entry);
+    assert.equal(entry.url, "https://example.com/mcp");
+    e.uninstallMcp(p);
+    assert.equal(e.readMcp(p), null);
+    cleanup(configPath);
+  });
+});
+
+describe("createManualPlatform (Junie)", () => {
+  it("returns correct config for junie", () => {
+    const p = createManualPlatform("junie");
+    assert.equal(p.platform, "junie");
+    assert.equal(p.rootKey, "mcpServers");
+    assert.equal(p.configFormat, "json");
+    assert.ok(p.configPath.includes(".junie"));
+    assert.equal(p.rulesPath, null);
   });
 });
