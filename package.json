@@ -1,6 +1,6 @@
 {
   "name": "@cg3/equip",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Universal MCP + behavioral rules installer for AI coding agents",
   "main": "index.js",
   "bin": {
@@ -12,7 +12,8 @@
     "./mcp": "./lib/mcp.js",
     "./rules": "./lib/rules.js",
     "./platforms": "./lib/platforms.js",
-    "./cli": "./lib/cli.js"
+    "./cli": "./lib/cli.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
