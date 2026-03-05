@@ -36,10 +36,33 @@ if (!alias || alias === "--help" || alias === "-h") {
 }
 
 const entry = TOOLS[alias];
+
+// No registry match — treat as a package name (e.g. "@scope/pkg setup")
 if (!entry) {
-  console.error(`Unknown tool: ${alias}`);
-  console.error(`Available: ${Object.keys(TOOLS).join(", ")}`);
-  process.exit(1);
+  const pkg = alias;
+  const command = extraArgs.shift(); // first extra arg is the command
+  if (!command) {
+    console.error(`Usage: npx @cg3/equip <package> <command> [options]`);
+    console.error(`   or: npx @cg3/equip <shorthand> [options]`);
+    console.error("");
+    console.error("Registered shorthands:");
+    for (const [name, info] of Object.entries(TOOLS)) {
+      console.log(`  ${name}  →  ${info.package} ${info.command}`);
+    }
+    process.exit(1);
+  }
+  const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+  const child = spawn(npxCmd, ["-y", `${pkg}@latest`, command, ...extraArgs], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: { ...process.env, EQUIP_VERSION },
+  });
+  child.on("close", (code) => process.exit(code || 0));
+  child.on("error", (err) => {
+    console.error(`Failed to run ${pkg}: ${err.message}`);
+    process.exit(1);
+  });
+  return;
 }
 
 // Spawn: npx -y <package> <command> [...extraArgs]

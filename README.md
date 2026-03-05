@@ -6,16 +6,34 @@ Equip handles the hard part of distributing your MCP tool: detecting which AI co
 
 ## Supported Platforms
 
+Equip supports **11 platforms** across two tiers, depending on whether the platform has a writable location for behavioral rules.
+
+### Full Support — MCP + Behavioral Rules
+
+These platforms get both MCP server config *and* auto-installed behavioral rules. Rules teach agents *when* to use your tool (e.g., "search before debugging") and are versioned for idempotent updates.
+
 | Platform | MCP Config | Rules |
 |---|---|---|
 | Claude Code | `~/.claude.json` (JSON, `mcpServers`) | `~/.claude/CLAUDE.md` (append) |
-| Cursor | `~/.cursor/mcp.json` (JSON, `mcpServers`) | Clipboard (no writable global path) |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` (JSON, `mcpServers`) | `global_rules.md` (append) |
-| VS Code | `Code/User/mcp.json` (JSON, `servers`, `type: "http"`) | Clipboard |
 | Cline | `globalStorage/.../cline_mcp_settings.json` (JSON, `mcpServers`) | `~/Documents/Cline/Rules/` (standalone file) |
 | Roo Code | `globalStorage/.../cline_mcp_settings.json` (JSON, `mcpServers`) | `~/.roo/rules/` (standalone file) |
 | Codex | `~/.codex/config.toml` (TOML, `mcp_servers`) | `~/.codex/AGENTS.md` (append) |
 | Gemini CLI | `~/.gemini/settings.json` (JSON, `mcpServers`, `httpUrl`) | `~/.gemini/GEMINI.md` (append) |
+
+### MCP Only — No Writable Rules Path
+
+These platforms get MCP server config but don't have a writable global rules file (`rulesPath: null`). The MCP tools work fine — but equip can't auto-install behavioral rules.
+
+| Platform | MCP Config |
+|---|---|
+| Cursor | `~/.cursor/mcp.json` (JSON, `mcpServers`) |
+| VS Code | `Code/User/mcp.json` (JSON, `servers`, `type: "http"`) |
+| Junie (JetBrains) | `~/.junie/mcp/mcp.json` (JSON, `mcpServers`) |
+| Copilot (JetBrains) | `~/.config/github-copilot/intellij/mcp.json` (JSON, `mcpServers`) |
+| Copilot CLI | `~/.copilot/mcp-config.json` (JSON, `mcpServers`) |
+
+For these platforms, `installRules()` returns `{ action: "clipboard" }` if the platform is in the configurable `clipboardPlatforms` list (default: `["cursor", "vscode"]`), or `{ action: "skipped" }` otherwise. It's up to the consumer to decide how to handle this — e.g., copying rules to the clipboard, printing instructions, or skipping silently.
 
 ## Quick Start
 
@@ -24,6 +42,28 @@ npx @cg3/equip prior
 ```
 
 That's it. Detects your platforms, authenticates, installs MCP + rules, and verifies — all in one command. Pass `--dry-run` to preview without writing files.
+
+## CLI Usage
+
+You can invoke any npm package that has an equip-based setup command:
+
+```bash
+# Full package name + command
+npx @cg3/equip @cg3/prior-node setup
+
+# Shorthand (if registered)
+npx @cg3/equip prior
+```
+
+The CLI runs `npx -y <package>@latest <command>` with any extra args forwarded (e.g. `--dry-run`, `--platform codex`).
+
+### Shorthand Registry
+
+Registered shorthands save typing. Open a PR to `bin/equip.js` to add yours:
+
+| Shorthand | Expands to |
+|---|---|
+| `prior` | `@cg3/prior-node setup` |
 
 ## Programmatic Usage
 
@@ -94,6 +134,7 @@ const { detectPlatforms, installMcpJson, installRules, createManualPlatform, pla
 ## Key Features
 
 - **Zero dependencies** — Pure Node.js, works with Node 18+
+- **11 platforms** — Covers ~80% of active AI coding tool users
 - **Platform-aware** — Handles each platform's config quirks (JSON vs TOML, root keys, URL fields, type requirements)
 - **Non-destructive** — Merges into existing configs, creates backups, preserves other servers
 - **Versioned rules** — Marker-based blocks enable idempotent updates without clobbering user content
