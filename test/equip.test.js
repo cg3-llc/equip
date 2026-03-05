@@ -595,13 +595,13 @@ describe("equip CLI", () => {
     assert.ok(out.includes("prior"));
   });
 
-  it("errors on unknown tool", () => {
+  it("errors on unknown tool without command", () => {
     const { execSync } = require("child_process");
     try {
       execSync("node bin/equip.js nonexistent", { encoding: "utf-8", cwd: path.join(__dirname, ".."), stdio: "pipe" });
       assert.fail("should have thrown");
     } catch (e) {
-      assert.ok(e.stderr.includes("Unknown tool: nonexistent"));
+      assert.ok(e.stderr.includes("Usage: npx @cg3/equip"));
     }
   });
 });
