@@ -158,17 +158,21 @@ const { detectPlatforms, installMcpJson, installRules, createManualPlatform, pla
 - **Dry-run support** — Preview changes without writing files
 - **CLI helpers** — Colored output, prompts, clipboard utilities included
 
-## Limitations — Why Rules Matter (and Why They're Not Enough)
+## How the Layers Work Together
 
-MCP tool descriptions alone don't reliably trigger agent behavior. [Research on 856 MCP tools](https://arxiv.org/abs/2602.14878) found that 97.1% of tool descriptions contain quality issues, and even fully optimized descriptions only improve task success by ~6 percentage points.
+Equip distributes your MCP tool through three complementary layers, each stronger than the last:
 
-Behavioral rules (the `.md` files equip installs) are stronger — they live in the agent's system prompt or project context, closer to how agents make decisions. But they have limits too:
+1. **MCP config** — Makes the tool available. The agent *can* call it.
+2. **Behavioral rules** — Teaches the agent *when* to call it. Rules live in the agent's system prompt or project context, close to where decisions happen.
+3. **Lifecycle hooks** — Structurally enforces behavior at key moments (e.g., after an error, on task completion). Hooks inject context into the agent's reasoning at exactly the right time, without relying on the agent remembering its rules.
 
-- **Context window compaction** can drop rules from the agent's working memory during long sessions
-- **No platform hooks exist** to enforce tool calls — the agent always decides whether to act
-- **No open standard** for server-initiated actions (MCP sampling exists in spec but isn't widely implemented)
+Each layer compensates for the limitations of the one before it:
 
-Equip gives you the best available distribution: MCP config for tool availability + behavioral rules for usage guidance + lifecycle hooks for structural enforcement on platforms that support them. Hooks bridge the gap between "the agent knows the rules" and "the agent actually follows them" by injecting reminders at the exact moment an error occurs.
+- **Tool descriptions alone** don't reliably trigger behavior. [Research on 856 MCP tools](https://arxiv.org/abs/2602.14878) found that even fully optimized descriptions only improve task success by ~6 percentage points.
+- **Behavioral rules** are stronger, but can be dropped during context window compaction in long sessions, and the agent can still rationalize skipping them.
+- **Lifecycle hooks** are the strongest available enforcement — they fire automatically at the platform level, independent of the agent's memory or reasoning. Not all platforms support hooks yet, but equip installs them where available and silently skips where not.
+
+No layer is a silver bullet. Together, they give you the best coverage available today across the broadest set of platforms.
 
 ## License
 
