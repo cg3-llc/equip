@@ -51,7 +51,7 @@ const platformOverride = args.includes("--platform")
 // This is the core configuration. Replace these values with
 // your actual MCP server details.
 
-const TOOL_NAME = "my-tool";        // Name in MCP config files
+const TOOL_NAME = "acme-docs";       // Name in MCP config files
 const SERVER_URL = "https://api.example.com/mcp";  // Your MCP endpoint
 const RULES_VERSION = "0.1.0";      // Bump when rules content changes
 
@@ -65,14 +65,14 @@ const RULES_VERSION = "0.1.0";      // Bump when rules content changes
 //   <!-- /marker -->
 
 const RULES_CONTENT = `<!-- ${TOOL_NAME}:v${RULES_VERSION} -->
-## My Tool — Agent Instructions
+## Acme Docs — Agent Instructions
 
-When you encounter an error you haven't seen before:
-1. Search my-tool for existing solutions before debugging from scratch
-2. If you find a match, try it and give feedback (useful/not_useful/irrelevant)
-3. If you solve something novel, contribute the solution
+When working with Acme APIs or libraries:
+1. Use the acme-docs tool to look up current API signatures before guessing
+2. Check for deprecation notices — Acme ships breaking changes quarterly
+3. Prefer the code examples from acme-docs over generic web search results
 
-Keep searches focused on the error message, not the goal.
+The tool returns versioned docs matching your project's dependency version.
 <!-- /${TOOL_NAME} -->`;
 
 // ─── 4. Create the Equip instance ───────────────────────────
@@ -281,7 +281,15 @@ async function runInstall() {
         cli.ok(`${platformName(p.platform)} → rules updated`);
         break;
       case "skipped":
-        cli.info(`${platformName(p.platform)} → already current`);
+        // "skipped" can mean two things:
+        //   1. Rules already at this version (rulesPath exists, marker version matches)
+        //   2. Platform has no writable rules path (rulesPath is null)
+        // Distinguish them so the output isn't misleading.
+        if (p.rulesPath) {
+          cli.info(`${platformName(p.platform)} → already current`);
+        } else {
+          cli.info(`${platformName(p.platform)} → no rules path (MCP-only platform)`);
+        }
         break;
       case "clipboard":
         cli.info(`${platformName(p.platform)} → copied to clipboard (paste into settings)`);
