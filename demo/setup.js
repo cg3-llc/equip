@@ -105,15 +105,18 @@ const equip = new Equip({
   // events in supported platforms (currently Claude Code only).
   // hooks: [
   //   {
-  //     event: "PostToolUseFailure",
-  //     matcher: "Bash",
-  //     name: "search-on-error",
+  //     event: "PostToolUse",
+  //     matcher: "Write|Edit",
+  //     name: "check-api-version",
   //     script: `
-  //       // This runs after a Bash tool call fails.
+  //       // This runs after a Write or Edit tool call completes.
   //       // Hook scripts receive context via stdin (JSON).
   //       const input = require("fs").readFileSync("/dev/stdin", "utf-8");
-  //       const { tool_input, tool_output } = JSON.parse(input);
-  //       console.log("Consider searching my-tool for:", tool_output?.stderr);
+  //       const { tool_input } = JSON.parse(input);
+  //       // Remind the agent to verify API versions after editing code
+  //       if (tool_input?.file_path?.endsWith(".ts") || tool_input?.file_path?.endsWith(".js")) {
+  //         console.log("Reminder: verify API versions with acme-docs after code changes.");
+  //       }
   //     `,
   //   },
   // ],
